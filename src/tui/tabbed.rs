@@ -1,8 +1,6 @@
 use term_input::{Arrow, Key};
 use termbox_simple::{Termbox, TB_UNDERLINE};
 
-use std::rc::Rc;
-
 use config::Colors;
 use config::Style;
 use trie::Trie;
@@ -10,6 +8,7 @@ use tui::messaging::MessagingUI;
 use tui::messaging::Timestamp;
 use tui::MsgTarget;
 use tui::widget::WidgetRet;
+use tui::handle::TuiTarget;
 
 const LEFT_ARROW: char = '<';
 const RIGHT_ARROW: char = '>';
@@ -757,7 +756,7 @@ impl Tabbed {
     ////////////////////////////////////////////////////////////////////////////
     // Interfacing with tabs
 
-    fn apply_to_target<F>(&mut self, target: &MsgTarget, f: &F)
+    fn apply_to_target<F>(&mut self, serv_name: &str, target: &TuiTarget, f: &F)
     where
         F: Fn(&mut Tab, bool),
     {
@@ -769,7 +768,7 @@ impl Tabbed {
         let mut target_idxs: Vec<usize> = Vec::with_capacity(1);
 
         match *target {
-            MsgTarget::Server { serv_name } =>
+            TuiTarget::Server =>
                 for (tab_idx, tab) in self.tabs.iter().enumerate() {
                     if let MsgSource::Serv {
                         serv_name: ref serv_name_,
@@ -782,8 +781,7 @@ impl Tabbed {
                     }
                 },
 
-            MsgTarget::Chan {
-                serv_name,
+            TuiTarget::Chan {
                 chan_name,
             } =>
                 for (tab_idx, tab) in self.tabs.iter().enumerate() {
@@ -799,7 +797,7 @@ impl Tabbed {
                     }
                 },
 
-            MsgTarget::User { serv_name, nick } =>
+            TuiTarget::User { nick } =>
                 for (tab_idx, tab) in self.tabs.iter().enumerate() {
                     if let MsgSource::User {
                         serv_name: ref serv_name_,
@@ -813,14 +811,14 @@ impl Tabbed {
                     }
                 },
 
-            MsgTarget::AllServTabs { serv_name } =>
+            TuiTarget::AllServTabs =>
                 for (tab_idx, tab) in self.tabs.iter().enumerate() {
                     if tab.src.serv_name() == serv_name {
                         target_idxs.push(tab_idx);
                     }
                 },
 
-            MsgTarget::AllUserTabs { serv_name, nick } =>
+            TuiTarget::AllUserTabs { nick } =>
                 for (tab_idx, tab) in self.tabs.iter().enumerate() {
                     match tab.src {
                         MsgSource::Serv { .. } =>
@@ -842,14 +840,19 @@ impl Tabbed {
                     }
                 },
 
-            MsgTarget::CurrentTab => {
+            TuiTarget::CurrentTab => {
                 target_idxs.push(self.active_idx);
+            }
+
+            TuiTarget::MentionsTab => {
+                debug_assert!(self.tabs[0].src == MsgSource::Serv { serv_name: "mentions".to_owned() });
+                target_idxs.push(0);
             }
         }
 
         // Create server/chan/user tab when necessary
         if target_idxs.is_empty() {
-            for idx in self.maybe_create_tab(target) {
+            for idx in self.maybe_create_tab(serv_name, target) {
                 target_idxs.push(idx);
             }
         }
@@ -862,18 +865,17 @@ impl Tabbed {
         }
     }
 
-    fn maybe_create_tab(&mut self, target: &MsgTarget) -> Option<usize> {
+    fn maybe_create_tab(&mut self, serv_name: &str, target: &TuiTarget) -> Option<usize> {
         match *target {
-            MsgTarget::Server { serv_name } | MsgTarget::AllServTabs { serv_name } =>
+            TuiTarget::Server | TuiTarget::AllServTabs =>
                 self.new_server_tab(serv_name),
 
-            MsgTarget::Chan {
-                serv_name,
+            TuiTarget::Chan {
                 chan_name,
             } =>
                 self.new_chan_tab(serv_name, chan_name),
 
-            MsgTarget::User { serv_name, nick } =>
+            TuiTarget::User { nick } =>
                 self.new_user_tab(serv_name, nick),
 
             _ =>
@@ -881,8 +883,9 @@ impl Tabbed {
         }
     }
 
-    pub fn set_tab_style(&mut self, style: TabStyle, target: &MsgTarget) {
+    pub fn set_tab_style(&mut self, style: TabStyle, serv_name: &str, target: &TuiTarget) {
         self.apply_to_target(
+            serv_name,
             target,
             &|tab: &mut Tab, is_active: bool| if !is_active && tab.style < style {
                 tab.set_style(style);
@@ -890,14 +893,14 @@ impl Tabbed {
         );
     }
 
-    pub fn add_client_err_msg(&mut self, msg: &str, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn add_client_err_msg(&mut self, msg: &str, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_client_err_msg(msg);
         });
     }
 
-    pub fn add_client_msg(&mut self, msg: &str, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn add_client_msg(&mut self, msg: &str, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_client_msg(msg);
         });
     }
@@ -907,10 +910,11 @@ impl Tabbed {
         sender: &str,
         msg: &str,
         ts: Timestamp,
-        target: &MsgTarget,
+        serv_name: &str,
+        target: &TuiTarget,
         ctcp_action: bool,
     ) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_privmsg(sender, msg, ts, false, ctcp_action);
         });
     }
@@ -920,46 +924,47 @@ impl Tabbed {
         sender: &str,
         msg: &str,
         ts: Timestamp,
-        target: &MsgTarget,
+        serv_name: &str,
+        target: &TuiTarget,
         ctcp_action: bool,
     ) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_privmsg(sender, msg, ts, true, ctcp_action);
         });
     }
 
-    pub fn add_msg(&mut self, msg: &str, ts: Timestamp, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn add_msg(&mut self, msg: &str, ts: Timestamp, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_msg(msg, ts);
         });
     }
 
-    pub fn add_err_msg(&mut self, msg: &str, ts: Timestamp, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn add_err_msg(&mut self, msg: &str, ts: Timestamp, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.add_err_msg(msg, ts);
         });
     }
 
-    pub fn show_topic(&mut self, title: &str, ts: Timestamp, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn show_topic(&mut self, title: &str, ts: Timestamp, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.show_topic(title, ts);
         });
     }
 
-    pub fn clear_nicks(&mut self, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn clear_nicks(&mut self, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.clear_nicks();
         });
     }
 
-    pub fn add_nick(&mut self, nick: &str, ts: Option<Timestamp>, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn add_nick(&mut self, nick: &str, ts: Option<Timestamp>, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.join(nick, ts);
         });
     }
 
-    pub fn remove_nick(&mut self, nick: &str, ts: Option<Timestamp>, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn remove_nick(&mut self, nick: &str, ts: Option<Timestamp>, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.part(nick, ts);
         });
     }
@@ -969,9 +974,10 @@ impl Tabbed {
         old_nick: &str,
         new_nick: &str,
         ts: Timestamp,
-        target: &MsgTarget,
+        serv_name: &str, 
+        target: &TuiTarget,
     ) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.nick(old_nick, new_nick, ts);
             tab.update_source(
                 &|src: &mut MsgSource| if let MsgSource::User { ref mut nick, .. } = *src {
@@ -982,18 +988,18 @@ impl Tabbed {
         });
     }
 
-    pub fn set_nick(&mut self, new_nick: Rc<String>, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn set_nick(&mut self, new_nick: String, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.set_nick(new_nick.clone())
         });
     }
 
-    pub fn clear(&mut self, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| tab.widget.clear());
+    pub fn clear(&mut self, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| tab.widget.clear());
     }
 
-    pub fn toggle_ignore(&mut self, target: &MsgTarget) {
-        self.apply_to_target(target, &|tab: &mut Tab, _| {
+    pub fn toggle_ignore(&mut self, serv_name: &str, target: &TuiTarget) {
+        self.apply_to_target(serv_name, target, &|tab: &mut Tab, _| {
             tab.widget.ignore();
         });
     }

@@ -5,9 +5,9 @@ pub mod tabbed;
 pub mod termbox;
 pub mod text_field;
 pub mod widget;
+pub mod handle;
 
 use std::fs;
-use std::rc::Rc;
 use std::str;
 
 use config::Colors;
@@ -26,7 +26,7 @@ pub struct TUI {
     colors: Colors,
 
     /// A tab for every server + channel
-    ui: Tabbed,
+    pub ui: Tabbed,
 }
 
 #[derive(Debug)]
@@ -96,16 +96,16 @@ impl TUI {
     }
 
     pub fn set_tab_style(&mut self, style: TabStyle, target: &MsgTarget) {
-        self.ui.set_tab_style(style, target);
+        // self.ui.set_tab_style(style, target);
     }
 
-    pub fn set_nick(&mut self, serv_name: &str, nick: Rc<String>) {
-        self.ui.set_nick(
-            nick,
-            &MsgTarget::AllServTabs {
-                serv_name: serv_name,
-            },
-        );
+    pub fn set_nick(&mut self, serv_name: &str, nick: String) {
+        // self.ui.set_nick(
+        //     nick,
+        //     &MsgTarget::AllServTabs {
+        //         serv_name: serv_name,
+        //     },
+        // );
     }
 
     pub fn get_nicks(&self, serv_name: &str, chan_name: &str) -> Option<&Trie> {
@@ -215,13 +215,13 @@ impl TUI {
     /// An error message coming from Tiny, probably because of a command error
     /// etc. Those are not timestamped and not logged.
     pub fn add_client_err_msg(&mut self, msg: &str, target: &MsgTarget) {
-        self.ui.add_client_err_msg(msg, target);
+        // self.ui.add_client_err_msg(msg, target);
     }
 
     /// A message from client, usually just to indidate progress, e.g.
     /// "Connecting...". Not timestamed and not logged.
     pub fn add_client_msg(&mut self, msg: &str, target: &MsgTarget) {
-        self.ui.add_client_msg(msg, target);
+        // self.ui.add_client_msg(msg, target);
     }
 
     /// privmsg is a message coming from a server or client. Shown with sender's
@@ -234,7 +234,7 @@ impl TUI {
         target: &MsgTarget,
         ctcp_action: bool,
     ) {
-        self.ui.add_privmsg(sender, msg, ts, target, ctcp_action);
+        // self.ui.add_privmsg(sender, msg, ts, target, ctcp_action);
     }
 
     /// Similar to `add_privmsg`, except the whole message is highlighted.
@@ -246,40 +246,40 @@ impl TUI {
         target: &MsgTarget,
         ctcp_action: bool,
     ) {
-        self.ui
-            .add_privmsg_highlight(sender, msg, ts, target, ctcp_action);
+        // self.ui
+        //     .add_privmsg_highlight(sender, msg, ts, target, ctcp_action);
     }
 
     /// A message without any explicit sender info. Useful for e.g. in server
     /// and debug log tabs. Timestamped and logged.
     pub fn add_msg(&mut self, msg: &str, ts: Timestamp, target: &MsgTarget) {
-        self.ui.add_msg(msg, ts, target);
+        // self.ui.add_msg(msg, ts, target);
     }
 
     /// Error messages related with the protocol - e.g. can't join a channel,
     /// nickname is in use etc. Timestamped and logged.
     pub fn add_err_msg(&mut self, msg: &str, ts: Timestamp, target: &MsgTarget) {
-        self.ui.add_err_msg(msg, ts, target);
+        // self.ui.add_err_msg(msg, ts, target);
     }
 
     pub fn show_topic(&mut self, msg: &str, ts: Timestamp, target: &MsgTarget) {
-        self.ui.show_topic(msg, ts, target);
+        // self.ui.show_topic(msg, ts, target);
     }
 
     pub fn clear_nicks(&mut self, target: &MsgTarget) {
-        self.ui.clear_nicks(target);
+        // self.ui.clear_nicks(target);
     }
 
     pub fn add_nick(&mut self, nick: &str, ts: Option<Timestamp>, target: &MsgTarget) {
-        self.ui.add_nick(nick, ts, target);
+        // self.ui.add_nick(nick, ts, target);
     }
 
     pub fn toggle_ignore(&mut self, target: &MsgTarget) {
-        self.ui.toggle_ignore(target);
+        // self.ui.toggle_ignore(target);
     }
 
     pub fn remove_nick(&mut self, nick: &str, ts: Option<Timestamp>, target: &MsgTarget) {
-        self.ui.remove_nick(nick, ts, target);
+        // self.ui.remove_nick(nick, ts, target);
     }
 
     pub fn rename_nick(
@@ -289,14 +289,14 @@ impl TUI {
         ts: Timestamp,
         target: &MsgTarget,
     ) {
-        self.ui.rename_nick(old_nick, new_nick, ts, target);
+        // self.ui.rename_nick(old_nick, new_nick, ts, target);
     }
 
     pub fn clear(&mut self, target: &MsgTarget) {
-        self.ui.clear(target);
+        // self.ui.clear(target);
     }
 
     pub fn switch(&mut self, string: &str) {
-        self.ui.switch(string)
+        // self.ui.switch(string)
     }
 }
